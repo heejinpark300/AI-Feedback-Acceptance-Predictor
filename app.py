@@ -1,4 +1,5 @@
 
+
 import streamlit as st
 import pandas as pd
 import joblib
@@ -8,57 +9,47 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    ConfusionMatrixDisplay
-)
+from sklearn.metrics import accuracy_score, f1_score, ConfusionMatrixDisplay
 
-# 파일 경로
 BASE = Path(__file__).resolve().parent
 
-# 저장된 예측 모델
-model = joblib.load(BASE / "trained_model.joblib")
-
-# 웹앱 기본 설정
 st.set_page_config(
     page_title="AI Feedback Acceptance Predictor",
     page_icon="🎓",
     layout="wide"
 )
 
+@st.cache_resource
+def load_prediction_model():
+    return joblib.load(BASE / "trained_model.joblib")
+
+model = load_prediction_model()
+
 st.title("🎓 AI Feedback Acceptance Predictor")
-st.subheader("AI 영어학습 피드백 수용 행동 예측")
+st.caption("Machine Learning | Human–AI Interaction | Educational AI")
 
 st.info(
-    "본 서비스는 합성 데이터 300건을 활용한 "
-    "머신러닝 프로토타입입니다."
+    "This educational prototype uses 300 synthetically generated observations. "
+    "Its predictions do not represent validated learner behavior."
 )
 
-# 세 가지 탭
 tab1, tab2, tab3 = st.tabs([
-    "① 행동 예측",
-    "② 모델 성능",
-    "③ 변수 중요도"
+    "Behavior Prediction",
+    "Model Performance",
+    "Feature Importance"
 ])
 
 labels = {
-    0: "AI 피드백을 그대로 수용",
-    1: "AI 피드백을 수정 후 사용",
-    2: "AI 피드백을 거부"
+    0: "Accept AI feedback",
+    1: "Edit AI feedback before use",
+    2: "Reject AI feedback"
 }
 
-
-# -----------------------------------
-# 모델 평가 데이터 준비
-# -----------------------------------
 @st.cache_resource
 def prepare_models():
     df = pd.read_csv(BASE / "sample_data.csv")
 
-    X = df[
-        ["trust_score", "english_level", "ai_experience"]
-    ]
+    X = df[["trust_score", "english_level", "ai_experience"]]
     y = df["decision"]
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -69,9 +60,7 @@ def prepare_models():
     )
 
     models = {
-        "Logistic Regression": LogisticRegression(
-            max_iter=1000
-        ),
+        "Logistic Regression": LogisticRegression(max_iter=1000),
         "Random Forest": RandomForestClassifier(
             n_estimators=100,
             random_state=42
@@ -82,65 +71,59 @@ def prepare_models():
 
     for name, clf in models.items():
         clf.fit(X_train, y_train)
-        pred = clf.predict(X_test)
+        predictions = clf.predict(X_test)
 
         results.append({
             "Model": name,
-            "Accuracy": accuracy_score(y_test, pred),
+            "Accuracy": accuracy_score(y_test, predictions),
             "Macro F1-score": f1_score(
-                y_test, pred, average="macro"
+                y_test, predictions, average="macro"
             )
         })
 
-    results_df = pd.DataFrame(results)
-
     return (
-        results_df,
+        pd.DataFrame(results),
         models["Random Forest"],
         X_test,
         y_test,
         X.columns
     )
 
-
-# -----------------------------------
-# 탭 1. 행동 예측
-# -----------------------------------
+# TAB 1: BEHAVIOR PREDICTION
 with tab1:
-    st.header("1. 학습자 정보 입력")
+    st.header("1. Learner Information")
 
     trust = st.slider(
-        "AI 답변을 얼마나 신뢰하나요?",
+        "How much do you trust AI-generated feedback?",
         min_value=0,
         max_value=100,
         value=70
     )
 
     level = st.selectbox(
-        "영어 수준",
+        "English Proficiency",
         options=[1, 2, 3],
         format_func=lambda x: {
-            1: "초급",
-            2: "중급",
-            3: "고급"
+            1: "Beginner",
+            2: "Intermediate",
+            3: "Advanced"
         }[x]
     )
 
     experience = st.selectbox(
-        "AI 영어학습 사용 경험",
+        "AI Learning Experience",
         options=[1, 2, 3],
         format_func=lambda x: {
-            1: "적음",
-            2: "보통",
-            3: "많음"
+            1: "Low",
+            2: "Moderate",
+            3: "High"
         }[x]
     )
 
     st.divider()
-    st.header("2. AI 피드백 수용 행동 예측")
+    st.header("2. Predicted Response to AI Feedback")
 
-    if st.button("🔍 행동 예측하기", type="primary"):
-
+    if st.button("Predict Response", type="primary"):
         input_data = pd.DataFrame([{
             "trust_score": trust,
             "english_level": level,
@@ -149,46 +132,39 @@ with tab1:
 
         prediction = int(model.predict(input_data)[0])
 
-        st.success(
-            f"예측 결과: {labels[prediction]}"
-        )
+        st.success(f"Predicted Response: {labels[prediction]}")
 
-        probabilities = model.predict_proba(
-            input_data
-        )[0]
+        probabilities = model.predict_proba(input_data)[0]
 
         chart_data = pd.DataFrame({
-            "행동 유형": [
+            "Response Type": [
                 labels[int(c)] for c in model.classes_
             ],
-            "예측 확률": probabilities
+            "Prediction Score": probabilities
         })
 
-        st.subheader("행동 유형별 예측 확률")
-        st.bar_chart(
-            chart_data.set_index("행동 유형")
+        st.subheader("Prediction Scores by Response Type")
+        st.bar_chart(chart_data.set_index("Response Type"))
+
+        st.caption(
+            "Prediction scores are generated by a model trained on "
+            "synthetic data and are not validated behavioral probabilities."
         )
 
-
-# -----------------------------------
-# 탭 2. 모델 성능
-# -----------------------------------
+# TAB 2: MODEL PERFORMANCE
 with tab2:
-    st.header("머신러닝 모델 성능 비교")
+    st.header("Machine Learning Model Performance")
 
-    results_df, rf_model, X_test, y_test, features = (
-        prepare_models()
-    )
+    results_df, rf_model, X_test, y_test, features = prepare_models()
 
-    st.subheader("1. 모델별 성능 비교")
-
+    st.subheader("1. Model Comparison")
     st.dataframe(
         results_df.round(4),
         hide_index=True,
         use_container_width=True
     )
 
-    st.subheader("2. Random Forest 혼동행렬")
+    st.subheader("2. Random Forest Confusion Matrix")
 
     fig, ax = plt.subplots(figsize=(6, 4))
 
@@ -205,12 +181,15 @@ with tab2:
     st.pyplot(fig)
     plt.close(fig)
 
+    st.warning(
+        "The target labels were randomly generated. "
+        "Low predictive accuracy is expected, and the results "
+        "must not be interpreted as evidence of actual learner behavior."
+    )
 
-# -----------------------------------
-# 탭 3. 변수 중요도
-# -----------------------------------
+# TAB 3: FEATURE IMPORTANCE
 with tab3:
-    st.header("Random Forest 변수 중요도")
+    st.header("Random Forest Feature Importance")
 
     _, rf_model, _, _, features = prepare_models()
 
@@ -220,22 +199,20 @@ with tab3:
     ).sort_values(ascending=False)
 
     importance_df = pd.DataFrame({
-        "변수": importance.index,
-        "중요도": importance.values
+        "Feature": importance.index,
+        "Importance": importance.values
     })
 
-    st.subheader("1. 변수 중요도 수치")
-
+    st.subheader("1. Feature Importance Values")
     st.dataframe(
         importance_df.round(6),
         hide_index=True,
         use_container_width=True
     )
 
-    st.subheader("2. 변수 중요도 시각화")
+    st.subheader("2. Feature Importance Visualization")
 
     fig, ax = plt.subplots(figsize=(7, 4))
-
     importance.sort_values().plot(
         kind="barh",
         ax=ax,
@@ -247,3 +224,9 @@ with tab3:
 
     st.pyplot(fig)
     plt.close(fig)
+
+    st.caption(
+        "Feature importance describes the fitted model, "
+        "not a validated relationship between these variables "
+        "and real learner feedback behavior."
+    )
